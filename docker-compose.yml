@@ -1,18 +1,22 @@
+version: "3.8"
+
 services:
   mongodb:
-    image: mongo:latest
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    image: mongo:4.4
+    container_name: mongodb_container
     ports:
       - "27017:27017"
     volumes:
       - ./mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin1234
     healthcheck:
-      test: ["CMD", "mongosh", "-u", "${MONGO_ROOT_USERNAME}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
-      interval: 5s
+      test: ["CMD", "mongo", "admin", "-u", "admin", "-p", "admin1234", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+      start_period: 10s
     networks:
       - mongo-net
 
@@ -23,8 +27,13 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    restart: on-failure
     environment:
-      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/
+      # Usa los valores literales directamente
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin1234
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin1234@mongodb:27017/anti_social_net?authSource=admin
       ME_CONFIG_BASICAUTH: "false"
     networks:
       - mongo-net
@@ -56,11 +65,18 @@ services:
 
   api:
     build: .
+    ports:
+      - "8080:8080"
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
+    environment:
+      # MUY IMPORTANTE: Usamos el nombre del servicio 'mongodb' y no 'localhost'
+      - MONGO_URI=mongodb://admin:admin1234@mongodb:27017/anti_social_net?authSource=admin
+      - PORT=8080
+      - REDIS_PASSWORD=admin1234
     networks:
       - mongo-net
       - redis-net
